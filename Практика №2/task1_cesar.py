@@ -98,5 +98,6 @@ else:  # Расшифровка
 
 # Обработка текста и вывод результата
 result_text = caesar_cipher(text_orig, effective_shift, alphabet)
-print("\nОперация успешно завершена! Результат:")
+print("Операция успешно завершена! Результат:")
 print(result_text)
+
