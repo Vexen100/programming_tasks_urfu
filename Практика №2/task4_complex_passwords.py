@@ -1,6 +1,5 @@
-from random import choices, shuffle, randint
+from random import choice, shuffle
 
-result = list()
 LOWERCASE = "abcdefghijklmnopqrstuvwxyz"
 UPPERCASE = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 DIGITS = "0123456789"
@@ -11,7 +10,7 @@ print(
     'Добро пожаловать в сервис паролей — ваш надёжный помощник в создании безопасных паролей! 🛡️',
     'Давайте настроим идеальный пароль под ваши нужды.',
     sep='\n'
-)
+)л
 
 # Сбор пользовательских предпочтений для генерации пароля
 while True:
@@ -53,43 +52,51 @@ while True:
 
     password_length = int(input(
         'Какой длины должен быть пароль? '
-        '(рекомендуется от 8 до 32 символов): '
+        '(рекомендуется от 8 до 32 символов, максимум 100): '
     ))
-    while password_length <= 0:
-        print('Ошибка: пожалуйста, введите корректное значение длины. (больше 0)')
+    while password_length <= 0 or password_length > 100:
+        print('Ошибка: длина пароля должна быть от 1 до 100 символов.')
         password_length = int(input(
             'Какой длины должен быть пароль? '
-            '(рекомендуется от 8 до 32 символов): '
+            '(рекомендуется от 8 до 32 символов, максимум 100): '
         ))
 
     # Проверка, что выбран хотя бы один тип символов
     if (
-        password_lower_case == 'нет'
-        and password_upper_case == 'нет'
-        and password_special_characters == 'нет'
-        and password_numbers == 'нет'
+        password_lower_case == 'нет' and
+        password_upper_case == 'нет' and
+        password_special_characters == 'нет' and
+        password_numbers == 'нет'
     ):
         print(
             'Предупреждение: пароль не может быть пустым. '
-            'Пожалуйста, включите хотя бы один тип символов. Перезапускаю выбор...'
+            'Пожалуйста, включите хотя бы один тип символов.'
         )
     else:
         break
 
-# Генерация пароля с учетом выбранных параметров
-while True:
-    if password_lower_case == 'да':
-        result += choices(LOWERCASE, k=randint(1, password_length // 2))
-    if password_upper_case == 'да':
-        result += choices(UPPERCASE, k=randint(1, password_length // 2))
-    if password_special_characters == 'да':
-        result += choices(SPECIAL, k=randint(1, password_length // 2))
-    if password_numbers == 'да':
-        result += choices(DIGITS, k=randint(1, password_length // 2))
-    
-    if len(result) == password_length:
-        break
-    result = list()
+# Генерация пароля с гарантией завершения
+result = []
+selected_char_types = []
 
+if password_lower_case == 'да':
+    selected_char_types.append(LOWERCASE)
+if password_upper_case == 'да':
+    selected_char_types.append(UPPERCASE)
+if password_special_characters == 'да':
+    selected_char_types.append(SPECIAL)
+if password_numbers == 'да':
+    selected_char_types.append(DIGITS)
+
+# Гарантированное распределение символов
+while len(result) < password_length:
+    for char_type in selected_char_types:
+        if len(result) >= password_length:
+            break
+        result.append(choice(char_type))
+
+# Перемешивание для безопасности
 shuffle(result)
-print(f'Вот ваш пароль: {"".join(result)}', 'Удачи!', sep='\n')
+final_password = ''.join(result[:password_length])
+
+print(f'Вот ваш пароль: {final_password}', 'Удачи!', sep='\n')
