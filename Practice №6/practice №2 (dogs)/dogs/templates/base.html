@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Собаки{% endblock %}</title>
+</head>
+<body>
+    <header>
+        <nav>
+            <h1>Фотки собак</h1>
+        </nav>
+    </header>
+
+    <main>
+        {% block content %}
+        <!-- Постраничное содержание -->
+        {% endblock %}
+    </main>
+
+    <footer>
+        <p>&copy; 2025- осторожно, злая собака!</p>
+    </footer>
+</body>
+</html>

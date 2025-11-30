@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+
+{% block title %}Собаки{% endblock %}
+
+{% block content %}
+<!-- Отображение списка собак -->
+<h2>Список собак</h2>
+{% for breed in breeds %}
+{{ breed }}, 
+{% endfor %}
+
+<!-- Отображение строки ввода -->
+<h2>Введите данные для GET-запрос, чтобы получить собак</h2>
+<form method="GET" action="">
+    <label for="input_field">Введите текст:</label><br>
+    <input type="text" id="input_field" name="input_field" required><br><br>
+    <button type="submit">Отправить</button>
+</form>
+
+<!-- Отображение изменяющихся данных из view -->
+{% for breed in entered_breeds %}
+<article>
+    <h2>{{ breed }}</h2>
+    <img src="{{ MEDIA_URL }}/{{ breed }}.jpg" alt="Фото собаки", width=150, height=150>
+    <h3>---------------------</h3>
+</article>
+{% endfor %}
+{% endblock %}
