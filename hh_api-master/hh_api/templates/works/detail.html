@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ vacancy.name }}{% endblock %}
+
+{% block content %}
+    <h2>{{ vacancy.name }}</h2>
+    <p><strong>Компания:</strong> {{ vacancy.employer.name }}</p>
+    <p><strong>Регион:</strong> {{ vacancy.city.name }}</p>
+    {% if vacancy.salary_lower or vacancy.salary_upper %}
+        <p><strong>Зарплата:</strong> {{ vacancy.get_salary_display }}</p>
+    {% endif %}
+    {% if vacancy.category %}
+        <p><strong>Категория:</strong> {{ vacancy.category.name }}</p>
+    {% endif %}
+
+    <div style="margin-top: 30px; padding: 20px; background-color: #f9f9f9; border-radius: 5px;">
+        {% if vacancy.description %}
+            <h3>Описание вакансии</h3>
+            <div style="line-height: 1.6;">
+                {{ vacancy.description|safe }}
+            </div>
+        {% else %}
+            <p style="color: #666;">Работодатель не предоставил описания вакансии.</p>
+        {% endif %}
+    </div>
+
+    <p><a href="{% url 'vacancy_list' %}">&larr; Назад к каталогу</a></p>
+{% endblock %}
