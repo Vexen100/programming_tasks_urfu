@@ -1,0 +1,432 @@
+"""
+Паттерн "Команда" - каждая операция (действие) становится отдельным объектом
+Это позволяет:
+1. Хранить историю операций
+2. Отменять операции (undo)
+3. Повторять операции (redo)
+4. Легко добавлять новые операции
+"""
+
+from datetime import datetime, timedelta
+from enum import Enum
+from typing import Optional, List, Dict, Any
+import uuid
+
+
+# ==================== МОДЕЛИ ДАННЫХ ====================
+
+class TaskStatus(Enum):
+    """Перечисление статусов задачи"""
+    NEW = "Новая"
+    IN_PROGRESS = "В работе"
+    REVIEW = "На проверке"
+    DONE = "Выполнена"
+    CANCELLED = "Отменена"
+
+
+class Task:
+    """Класс задачи"""
+    
+    def __init__(self, title: str, description: str = ""):
+        self.id = str(uuid.uuid4())  # Уникальный ID
+        self.title = title
+        self.description = description
+        self.status = TaskStatus.NEW
+        self.assigned_user: Optional[str] = None
+        self.deadline: Optional[datetime] = None
+        self.created_at = datetime.now()
+        self.updated_at = datetime.now()
+        self.project_id: Optional[str] = None
+    
+    def __str__(self):
+        return f"Задача '{self.title}' ({self.status.value})"
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Конвертация в словарь для удобства"""
+        return {
+            "id": self.id,
+            "title": self.title,
+            "description": self.description,
+            "status": self.status.value,
+            "assigned_user": self.assigned_user,
+            "deadline": self.deadline.isoformat() if self.deadline else None,
+            "project_id": self.project_id
+        }
+
+
+class Project:
+    """Класс проекта - содержит задачи"""
+    
+    def __init__(self, name: str, description: str = ""):
+        self.id = str(uuid.uuid4())
+        self.name = name
+        self.description = description
+        self.created_at = datetime.now()
+        self.tasks: List[Task] = []
+    
+    def add_task(self, task: Task):
+        """Добавить задачу в проект"""
+        task.project_id = self.id
+        self.tasks.append(task)
+    
+    def remove_task(self, task_id: str):
+        """Удалить задачу из проекта"""
+        self.tasks = [t for t in self.tasks if t.id != task_id]
+    
+    def get_task(self, task_id: str) -> Optional[Task]:
+        """Получить задачу по ID"""
+        for task in self.tasks:
+            if task.id == task_id:
+                return task
+        return None
+    
+    def __str__(self):
+        return f"Проект '{self.name}' ({len(self.tasks)} задач)"
+
+
+# ==================== ПАТТЕРН "КОМАНДА" ====================
+
+class Command:
+    """
+    Базовый класс команды.
+    Паттерн "Команда" превращает операции в объекты.
+    """
+    
+    def execute(self, task: Task, *args, **kwargs):
+        """Выполнить команду"""
+        raise NotImplementedError()
+    
+    def undo(self, task: Task):
+        """Отменить команду"""
+        raise NotImplementedError()
+
+
+class CreateTaskCommand(Command):
+    """Команда создания задачи"""
+    
+    def __init__(self):
+        # Сохраняем старые значения для отмены
+        self.old_state: Optional[Dict] = None
+        self.task: Optional[Task] = None
+    
+    def execute(self, task: Task, *args, **kwargs):
+        """Создать задачу"""
+        self.task = task
+        # Запоминаем, что задача была создана
+        print(f"✓ Создана задача: {task.title}")
+        return task
+    
+    def undo(self, task: Task):
+        """Отменить создание задачи"""
+        print(f"✗ Удалена задача: {task.title}")
+        # В реальной системе здесь была бы логика удаления из БД
+        self.task = None
+
+
+class ChangeStatusCommand(Command):
+    """Команда изменения статуса"""
+    
+    def __init__(self):
+        self.old_status: Optional[TaskStatus] = None
+    
+    def execute(self, task: Task, new_status: TaskStatus, *args, **kwargs):
+        """Изменить статус задачи"""
+        # Сохраняем старый статус для отмены
+        self.old_status = task.status
+        # Меняем статус
+        task.status = new_status
+        task.updated_at = datetime.now()
+        
+        print(f"✓ Статус задачи '{task.title}' изменен: "
+              f"{self.old_status.value} → {new_status.value}")
+        return task
+    
+    def undo(self, task: Task):
+        """Отменить изменение статуса"""
+        if self.old_status:
+            old = task.status
+            task.status = self.old_status
+            task.updated_at = datetime.now()
+            print(f"↶ Отмена изменения статуса: "
+                  f"{old.value} → {self.old_status.value}")
+
+
+class AssignUserCommand(Command):
+    """Команда назначения пользователя"""
+    
+    def __init__(self):
+        self.old_user: Optional[str] = None
+    
+    def execute(self, task: Task, user: str, *args, **kwargs):
+        """Назначить пользователя на задачу"""
+        self.old_user = task.assigned_user
+        task.assigned_user = user
+        task.updated_at = datetime.now()
+        
+        if self.old_user:
+            print(f"✓ Пользователь изменен: {self.old_user} → {user}")
+        else:
+            print(f"✓ Назначен пользователь: {user}")
+        return task
+    
+    def undo(self, task: Task):
+        """Отменить назначение пользователя"""
+        task.assigned_user = self.old_user
+        task.updated_at = datetime.now()
+        if self.old_user:
+            print(f"↶ Пользователь возвращен: {self.old_user}")
+        else:
+            print(f"↶ Назначение пользователя отменено")
+
+
+class SetDeadlineCommand(Command):
+    """Команда установки дедлайна"""
+    
+    def __init__(self):
+        self.old_deadline: Optional[datetime] = None
+    
+    def execute(self, task: Task, days: int, *args, **kwargs):
+        """Установить дедлайн (через N дней)"""
+        self.old_deadline = task.deadline
+        task.deadline = datetime.now() + timedelta(days=days)
+        task.updated_at = datetime.now()
+        
+        deadline_str = task.deadline.strftime("%d.%m.%Y")
+        print(f"✓ Установлен дедлайн: {deadline_str}")
+        return task
+    
+    def undo(self, task: Task):
+        """Отменить установку дедлайна"""
+        task.deadline = self.old_deadline
+        task.updated_at = datetime.now()
+        if self.old_deadline:
+            old_str = self.old_deadline.strftime("%d.%m.%Y")
+            print(f"↶ Дедлайн возвращен: {old_str}")
+        else:
+            print(f"↶ Дедлайн удален")
+
+
+# ==================== МЕНЕДЖЕР ЗАДАЧ ====================
+
+class TaskManager:
+    """
+    Менеджер задач - управляет выполнением команд и историей
+    Реализует паттерн "Команда" полностью
+    """
+    
+    def __init__(self):
+        self.tasks: Dict[str, Task] = {}  # ID → Task
+        self.projects: Dict[str, Project] = {}  # ID → Project
+        self.history: List[Dict] = []  # История команд
+        self.undo_stack: List[Dict] = []  # Стек отмененных команд
+        
+        # Регистрация доступных команд
+        self.commands = {
+            "create": CreateTaskCommand,
+            "status": ChangeStatusCommand,
+            "assign": AssignUserCommand,
+            "deadline": SetDeadlineCommand,
+        }
+    
+    def create_project(self, name: str, description: str = "") -> Project:
+        """Создать новый проект"""
+        project = Project(name, description)
+        self.projects[project.id] = project
+        print(f"\n📁 Создан проект: {name}")
+        return project
+    
+    def execute_command(self, command_name: str, task: Task, *args, **kwargs) -> Task:
+        """
+        Выполнить команду.
+        Это и есть суть паттерна "Команда" - мы не вызываем методы напрямую,
+        а создаем объект-команду и выполняем его.
+        """
+        if command_name not in self.commands:
+            raise ValueError(f"Неизвестная команда: {command_name}")
+        
+        # Создаем экземпляр команды
+        command = self.commands[command_name]()
+        
+        # Выполняем команду
+        result = command.execute(task, *args, **kwargs)
+        
+        # Сохраняем в историю
+        history_entry = {
+            "command": command,
+            "command_name": command_name,
+            "task": task,
+            "args": args,
+            "kwargs": kwargs,
+            "timestamp": datetime.now()
+        }
+        self.history.append(history_entry)
+        
+        # Очищаем стек отмены при новом действии
+        self.undo_stack.clear()
+        
+        return result
+    
+    def undo(self) -> bool:
+        """Отменить последнюю команду"""
+        if not self.history:
+            print("❌ Нет действий для отмены")
+            return False
+        
+        # Берем последнюю команду из истории
+        last_action = self.history.pop()
+        command = last_action["command"]
+        task = last_action["task"]
+        
+        # Выполняем отмену
+        command.undo(task)
+        
+        # Сохраняем в стек отмены для возможного redo
+        self.undo_stack.append(last_action)
+        
+        return True
+    
+    def redo(self) -> bool:
+        """Повторить отмененную команду"""
+        if not self.undo_stack:
+            print("❌ Нет действий для повтора")
+            return False
+        
+        # Берем последнюю отмененную команду
+        last_undo = self.undo_stack.pop()
+        command_name = last_undo["command_name"]
+        task = last_undo["task"]
+        args = last_undo["args"]
+        kwargs = last_undo["kwargs"]
+        
+        # Выполняем команду заново
+        self.execute_command(command_name, task, *args, **kwargs)
+        
+        return True
+    
+    def create_task(self, title: str, description: str = "") -> Task:
+        """Создать задачу (обертка для команды)"""
+        task = Task(title, description)
+        self.tasks[task.id] = task
+        self.execute_command("create", task)
+        return task
+    
+    def change_status(self, task: Task, status: TaskStatus):
+        """Изменить статус задачи (обертка для команды)"""
+        self.execute_command("status", task, status)
+    
+    def assign_user(self, task: Task, user: str):
+        """Назначить пользователя (обертка для команды)"""
+        self.execute_command("assign", task, user)
+    
+    def set_deadline(self, task: Task, days: int):
+        """Установить дедлайн (обертка для команды)"""
+        self.execute_command("deadline", task, days)
+    
+    def add_task_to_project(self, task: Task, project: Project):
+        """Добавить задачу в проект"""
+        project.add_task(task)
+        print(f"✓ Задача '{task.title}' добавлена в проект '{project.name}'")
+    
+    def print_history(self):
+        """Показать историю команд"""
+        print("\n" + "="*50)
+        print("📜 ИСТОРИЯ КОМАНД:")
+        print("="*50)
+        
+        for i, entry in enumerate(self.history, 1):
+            time_str = entry["timestamp"].strftime("%H:%M:%S")
+            print(f"{i}. [{time_str}] {entry['command_name']} - "
+                  f"Задача: {entry['task'].title}")
+        
+        if not self.history:
+            print("История пуста")
+
+
+# ==================== ТЕСТИРОВАНИЕ ====================
+
+def main():
+    """Демонстрация работы паттерна "Команда" """
+    
+    print("="*60)
+    print("🚀 ДЕМОНСТРАЦИЯ ПАТТЕРНА 'КОМАНДА' В TASK MANAGER")
+    print("="*60)
+    
+    # 1. Создаем менеджер задач
+    manager = TaskManager()
+    
+    # 2. Создаем проект
+    project = manager.create_project("Веб-сайт компании", "Разработка корпоративного сайта")
+    
+    print("\n" + "-"*50)
+    print("📝 СОЗДАНИЕ И УПРАВЛЕНИЕ ЗАДАЧАМИ:")
+    print("-"*50)
+    
+    # 3. Создаем задачу (команда CreateTask)
+    task1 = manager.create_task(
+        "Дизайн главной страницы",
+        "Создать макет главной страницы в Figma"
+    )
+    
+    # Добавляем задачу в проект
+    manager.add_task_to_project(task1, project)
+    
+    # 4. Назначаем пользователя (команда AssignUser)
+    manager.assign_user(task1, "Анна Петрова")
+    
+    # 5. Устанавливаем дедлайн (команда SetDeadline)
+    manager.set_deadline(task1, 5)  # через 5 дней
+    
+    # 6. Меняем статус (команда ChangeStatus)
+    manager.change_status(task1, TaskStatus.IN_PROGRESS)
+    
+    print("\n" + "-"*50)
+    print("↶ ТЕСТИРУЕМ ОТМЕНУ КОМАНД (UNDO):")
+    print("-"*50)
+    
+    # 7. Отменяем последние команды (undo)
+    manager.undo()  # Отмена изменения статуса
+    manager.undo()  # Отмена установки дедлайна
+    
+    print("\n" + "-"*50)
+    print("↷ ТЕСТИРУЕМ ПОВТОР КОМАНД (REDO):")
+    print("-"*50)
+    
+    # 8. Повторяем отмененные команды (redo)
+    manager.redo()  # Повтор установки дедлайна
+    manager.redo()  # Повтор изменения статуса
+    
+    print("\n" + "-"*50)
+    print("➕ СОЗДАЕМ ЕЩЕ ОДНУ ЗАДАЧУ:")
+    print("-"*50)
+    
+    # 9. Создаем еще одну задачу
+    task2 = manager.create_task(
+        "Разработка API",
+        "Реализовать backend API на Django"
+    )
+    manager.add_task_to_project(task2, project)
+    manager.assign_user(task2, "Иван Сидоров")
+    manager.change_status(task2, TaskStatus.IN_PROGRESS)
+    
+    # 10. Показываем историю команд
+    manager.print_history()
+    
+    print("\n" + "-"*50)
+    print("📊 ИТОГОВОЕ СОСТОЯНИЕ:")
+    print("-"*50)
+    
+    print(f"\n📁 Проект: {project.name}")
+    print(f"📋 Всего задач: {len(project.tasks)}")
+    
+    for task in project.tasks:
+        task_dict = task.to_dict()
+        print(f"\n  • {task.title}")
+        print(f"    Статус: {task_dict['status']}")
+        print(f"    Исполнитель: {task_dict['assigned_user'] or 'Не назначен'}")
+        if task_dict['deadline']:
+            deadline = datetime.fromisoformat(task_dict['deadline'])
+            print(f"    Дедлайн: {deadline.strftime('%d.%m.%Y')}")
+
+
+if __name__ == "__main__":
+    main()
